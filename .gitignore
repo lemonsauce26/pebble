@@ -1,0 +1,22 @@
+# 비밀 값 — 절대 커밋 금지
+.env
+.env.local
+.env*.local
+
+# 기획/개인 문서 — git에 올리지 않음
+docs/
+
+# Node / Expo
+node_modules/
+.expo/
+.expo-shared/
+dist/
+coverage/
+
+# 네이티브 빌드 산출물 (managed workflow 기준, prebuild 시 생김)
+ios/
+android/
+
+# 로그, OS 잔재
+*.log
+.DS_Store
