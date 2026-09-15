@@ -11,12 +11,26 @@ node_modules/
 .expo/
 .expo-shared/
 dist/
+web-build/
 coverage/
+expo-env.d.ts
+.metro-health-check*
+*.tsbuildinfo
 
 # 네이티브 빌드 산출물 (managed workflow 기준, prebuild 시 생김)
-ios/
-android/
+/ios
+/android
+.kotlin/
+
+# 서명 파일 — 절대 커밋 금지
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
 
 # 로그, OS 잔재
 *.log
+npm-debug.*
 .DS_Store
