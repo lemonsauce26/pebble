@@ -40,6 +40,13 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      "expo-secure-store",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.1076597416172-5pbid459rk8l3a0n1kfogngsuc53c54e"
+        }
       ]
     ],
     "experiments": {
