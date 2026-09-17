@@ -11,6 +11,7 @@ import { supabase } from '@/ports/supabase';
 import { configureGoogleSignIn } from '@/ports/google-auth';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
+import { ToastProvider } from '@/components/toast-provider';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -42,16 +43,18 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Protected guard={!!session}>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        </Stack.Protected>
-        <Stack.Protected guard={!session}>
-          <Stack.Screen name="login" options={{ headerShown: false }} />
-        </Stack.Protected>
-      </Stack>
-      <StatusBar style="auto" />
+      <ToastProvider>
+        <Stack>
+          <Stack.Protected guard={!!session}>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          </Stack.Protected>
+          <Stack.Protected guard={!session}>
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+          </Stack.Protected>
+        </Stack>
+        <StatusBar style="auto" />
+      </ToastProvider>
     </ThemeProvider>
   );
 }
