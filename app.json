@@ -47,7 +47,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.1076597416172-5pbid459rk8l3a0n1kfogngsuc53c54e"
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
