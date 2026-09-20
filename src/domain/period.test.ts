@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Clock } from "@/ports/clock";
-import { formatPeriodLabel, getCurrentMonthPeriod } from "./period";
+import { formatPeriodLabel, getCurrentMonthPeriod, shiftMonthPeriod } from "./period";
 
 function fixedClock(isoDate: string): Clock {
   return { now: () => new Date(isoDate) };
@@ -23,5 +23,23 @@ describe("formatPeriodLabel", () => {
 
   it("year 타입은 '2026년' 형식으로 바꾼다", () => {
     expect(formatPeriodLabel("year", "2026")).toBe("2026년");
+  });
+});
+
+describe("shiftMonthPeriod", () => {
+  it("다음 달로 이동한다", () => {
+    expect(shiftMonthPeriod("202609", 1)).toBe("202610");
+  });
+
+  it("이전 달로 이동한다", () => {
+    expect(shiftMonthPeriod("202609", -1)).toBe("202608");
+  });
+
+  it("12월에서 다음 달로 가면 해가 바뀐다", () => {
+    expect(shiftMonthPeriod("202612", 1)).toBe("202701");
+  });
+
+  it("1월에서 이전 달로 가면 해가 바뀐다", () => {
+    expect(shiftMonthPeriod("202601", -1)).toBe("202512");
   });
 });
