@@ -11,7 +11,7 @@ import { useErrorDialog } from "@/components/error-dialog-provider";
 import { ERROR_CODES } from "@/constants/error-codes";
 import { db } from "@/data/db";
 import migrations from "@/data/migrations/migrations";
-import { insertPlan, selectPlans } from "@/data/plan.repository";
+import { DuplicatePlanTitleError, insertPlan, selectPlans } from "@/data/plan.repository";
 import { formatPeriodLabel, getCurrentMonthPeriod } from "@/domain/period";
 import { systemClock } from "@/ports/clock";
 import { supabasePlanRemote } from "@/ports/plan-remote";
@@ -67,7 +67,10 @@ export default function HomeScreen() {
     } catch (error) {
       showErrorDialog({
         action: "추가",
-        code: ERROR_CODES.PLAN_INSERT_FAILED,
+        code:
+          error instanceof DuplicatePlanTitleError
+            ? ERROR_CODES.PLAN_DUPLICATE_TITLE
+            : ERROR_CODES.PLAN_INSERT_FAILED,
         message: error instanceof Error ? error.message : "계획을 저장하지 못했습니다.",
       });
       return;

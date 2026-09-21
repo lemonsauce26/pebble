@@ -7,6 +7,17 @@ export function getCurrentMonthPeriod(clock: Clock): string {
   return `${year}${month}`;
 }
 
+export function parseMonthPeriod(period: string): { year: number; month: number } {
+  return {
+    year: Number(period.slice(0, 4)),
+    month: Number(period.slice(4, 6)),
+  };
+}
+
+export function toMonthPeriod(year: number, month: number): string {
+  return `${year}${String(month).padStart(2, "0")}`;
+}
+
 export function shiftMonthPeriod(period: string, delta: number): string {
   const year = Number(period.slice(0, 4));
   const month = Number(period.slice(4, 6));

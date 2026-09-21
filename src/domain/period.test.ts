@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Clock } from "@/ports/clock";
-import { formatPeriodLabel, getCurrentMonthPeriod, shiftMonthPeriod } from "./period";
+import {
+  formatPeriodLabel,
+  getCurrentMonthPeriod,
+  parseMonthPeriod,
+  shiftMonthPeriod,
+  toMonthPeriod,
+} from "./period";
 
 function fixedClock(isoDate: string): Clock {
   return { now: () => new Date(isoDate) };
@@ -23,6 +29,26 @@ describe("formatPeriodLabel", () => {
 
   it("year 타입은 '2026년' 형식으로 바꾼다", () => {
     expect(formatPeriodLabel("year", "2026")).toBe("2026년");
+  });
+});
+
+describe("parseMonthPeriod", () => {
+  it("YYYYMM을 년/월 숫자로 쪼갠다", () => {
+    expect(parseMonthPeriod("202609")).toEqual({ year: 2026, month: 9 });
+  });
+
+  it("10월 이상도 올바르게 쪼갠다", () => {
+    expect(parseMonthPeriod("202612")).toEqual({ year: 2026, month: 12 });
+  });
+});
+
+describe("toMonthPeriod", () => {
+  it("년/월을 YYYYMM으로 합친다", () => {
+    expect(toMonthPeriod(2026, 9)).toBe("202609");
+  });
+
+  it("한 자리 월은 앞에 0을 채운다", () => {
+    expect(toMonthPeriod(2026, 1)).toBe("202601");
   });
 });
 

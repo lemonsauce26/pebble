@@ -1,13 +1,32 @@
 import { useState } from "react";
 import { Modal, Pressable, StyleSheet, TextInput, TouchableOpacity } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { formatPeriodLabel, getCurrentMonthPeriod, shiftMonthPeriod } from "@/domain/period";
+import {
+  formatPeriodLabel,
+  getCurrentMonthPeriod,
+  parseMonthPeriod,
+  shiftMonthPeriod,
+  toMonthPeriod,
+} from "@/domain/period";
 import { createPlan } from "@/domain/plan";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { systemClock } from "@/ports/clock";
+
+const YEAR_RANGE = 5;
+
+function buildYearOptions(currentYear: number): number[] {
+  const years: number[] = [];
+  for (let year = currentYear - YEAR_RANGE; year <= currentYear + YEAR_RANGE; year += 1) {
+    years.push(year);
+  }
+  return years;
+}
+
+const MONTH_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 
 export function AddPlanModal({
   visible,
@@ -22,11 +41,16 @@ export function AddPlanModal({
   const [title, setTitle] = useState("");
   const [period, setPeriod] = useState(() => getCurrentMonthPeriod(systemClock));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+
+  const { year: selectedYear, month: selectedMonth } = parseMonthPeriod(period);
+  const yearOptions = buildYearOptions(parseMonthPeriod(getCurrentMonthPeriod(systemClock)).year);
 
   function handleClose() {
     setTitle("");
     setPeriod(getCurrentMonthPeriod(systemClock));
     setErrorMessage(null);
+    setIsPickerOpen(false);
     onClose();
   }
 
@@ -69,7 +93,13 @@ export function AddPlanModal({
                 >
                   <IconSymbol name="chevron.left" size={20} color={iconColor} />
                 </TouchableOpacity>
-                <ThemedText>{formatPeriodLabel("month", period)}</ThemedText>
+                <TouchableOpacity
+                  onPress={() => setIsPickerOpen((open) => !open)}
+                  accessibilityRole="button"
+                  accessibilityLabel="년월 선택"
+                >
+                  <ThemedText>{formatPeriodLabel("month", period)}</ThemedText>
+                </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setPeriod(shiftMonthPeriod(period, 1))}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -79,6 +109,36 @@ export function AddPlanModal({
                   <IconSymbol name="chevron.right" size={20} color={iconColor} />
                 </TouchableOpacity>
               </ThemedView>
+
+              {isPickerOpen ? (
+                <ThemedView style={styles.pickerRow}>
+                  <Picker
+                    style={styles.picker}
+                    itemStyle={styles.pickerItem}
+                    selectedValue={selectedYear}
+                    onValueChange={(year) => setPeriod(toMonthPeriod(Number(year), selectedMonth))}
+                  >
+                    {yearOptions.map((year) => (
+                      <Picker.Item key={year} label={`${year}년`} value={year} color={iconColor} />
+                    ))}
+                  </Picker>
+                  <Picker
+                    style={styles.picker}
+                    itemStyle={styles.pickerItem}
+                    selectedValue={selectedMonth}
+                    onValueChange={(month) => setPeriod(toMonthPeriod(selectedYear, Number(month)))}
+                  >
+                    {MONTH_OPTIONS.map((month) => (
+                      <Picker.Item
+                        key={month}
+                        label={`${month}월`}
+                        value={month}
+                        color={iconColor}
+                      />
+                    ))}
+                  </Picker>
+                </ThemedView>
+              ) : null}
             </ThemedView>
 
             <ThemedView style={styles.buttonRow}>
@@ -130,6 +190,15 @@ const styles = StyleSheet.create({
   error: {
     color: "#d33",
     fontSize: 13,
+  },
+  pickerRow: {
+    flexDirection: "row",
+  },
+  picker: {
+    flex: 1,
+  },
+  pickerItem: {
+    fontSize: 20,
   },
   monthRow: {
     flexDirection: "row",

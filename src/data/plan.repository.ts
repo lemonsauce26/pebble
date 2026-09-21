@@ -31,6 +31,24 @@ export function insertPlan(
   const validated = createPlan(input.title);
   const now = clock.now();
 
+  // 같은 사람의 같은 기간(이번 달) 안에서만 이름 중복을 막는다. 다른 달은 같은 이름이어도 된다.
+  const duplicate = db
+    .select()
+    .from(plan)
+    .where(
+      and(
+        eq(plan.userId, input.userId),
+        eq(plan.type, input.type),
+        eq(plan.period, input.period),
+        eq(plan.title, validated.title),
+      ),
+    )
+    .all();
+
+  if (duplicate.length > 0) {
+    throw new DuplicatePlanTitleError();
+  }
+
   const row = {
     id: crypto.randomUUID(),
     userId: input.userId,
