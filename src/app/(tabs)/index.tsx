@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { FlatList, StyleSheet, TouchableOpacity } from "react-native";
+import { FlatList, Pressable, StyleSheet, TouchableOpacity } from "react-native";
 import { useLiveQuery } from "drizzle-orm/expo-sqlite";
 import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
 
 import { PlanFormModal, type PlanSubmitResult } from "@/components/plan-form-modal";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SwipeToDeleteRow } from "@/components/swipe-to-delete-row";
 import { EmptyState } from "@/components/empty-state";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -12,16 +14,18 @@ import { ERROR_CODES } from "@/constants/error-codes";
 import { db } from "@/data/db";
 import migrations from "@/data/migrations/migrations";
 import {
+  deletePlan,
   DuplicatePlanTitleError,
   insertPlan,
   selectPlans,
   updatePlan,
 } from "@/data/plan.repository";
 import { formatPeriodLabel, getCurrentMonthPeriod } from "@/domain/period";
+import { useThemeColor } from "@/hooks/use-theme-color";
 import { systemClock } from "@/ports/clock";
 import { supabasePlanRemote } from "@/ports/plan-remote";
 import { supabase } from "@/ports/supabase";
-import { pushPlan } from "@/sync/plan-push";
+import { pushPlan, pushPlanDeletion } from "@/sync/plan-push";
 
 type EditingPlan = { id: string; title: string; period: string };
 
@@ -31,6 +35,9 @@ export default function HomeScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<EditingPlan | null>(null);
+  const [deletingPlan, setDeletingPlan] = useState<{ id: string; title: string } | null>(null);
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
+  const backgroundColor = useThemeColor({}, "background");
 
   const period = getCurrentMonthPeriod(systemClock);
   const monthLabel = formatPeriodLabel("month", period);
@@ -138,8 +145,44 @@ export default function HomeScreen() {
     return { ok: true };
   }
 
+  function handleConfirmDelete() {
+    const target = deletingPlan;
+    if (!target) {
+      return;
+    }
+
+    setDeletingPlan(null);
+
+    try {
+      deletePlan(db, target.id);
+    } catch (error) {
+      showErrorDialog({
+        action: "삭제",
+        code: ERROR_CODES.PLAN_DELETE_FAILED,
+        message: error instanceof Error ? error.message : "계획을 삭제하지 못했습니다.",
+      });
+      return;
+    }
+
+    pushToCloud(
+      pushPlanDeletion(supabasePlanRemote, target.id),
+      "클라우드 삭제",
+      ERROR_CODES.PLAN_CLOUD_DELETE_FAILED,
+      "인터넷 연결을 확인해주세요. 이 기기에서는 삭제되었습니다.",
+    );
+  }
+
+  // 삭제 버튼이 열려 있을 때 다른 곳(빈 화면, 다른 계획)을 누르면 먼저 닫는다.
+  function handlePressRow(item: { id: string; title: string; period: string }) {
+    if (openRowId !== null) {
+      setOpenRowId(null);
+      return;
+    }
+    setEditingPlan({ id: item.id, title: item.title, period: item.period });
+  }
+
   return (
-    <ThemedView style={styles.container}>
+    <Pressable style={[styles.container, { backgroundColor }]} onPress={() => setOpenRowId(null)}>
       <ThemedView style={styles.headerRow}>
         <ThemedText type="title">{monthLabel}</ThemedText>
         <TouchableOpacity style={styles.addButton} onPress={() => setIsAddModalOpen(true)}>
@@ -151,15 +194,17 @@ export default function HomeScreen() {
         <FlatList
           data={plans}
           keyExtractor={(item) => item.id}
+          onScrollBeginDrag={() => setOpenRowId(null)}
           renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.planRow}
-              onPress={() =>
-                setEditingPlan({ id: item.id, title: item.title, period: item.period })
-              }
+            <SwipeToDeleteRow
+              isOpen={openRowId === item.id}
+              onRequestOpen={() => setOpenRowId(item.id)}
+              onRequestClose={() => setOpenRowId(null)}
+              onPressRow={() => handlePressRow(item)}
+              onPressDelete={() => setDeletingPlan({ id: item.id, title: item.title })}
             >
               <ThemedText>{item.title}</ThemedText>
-            </TouchableOpacity>
+            </SwipeToDeleteRow>
           )}
         />
       ) : (
@@ -181,7 +226,15 @@ export default function HomeScreen() {
         onClose={() => setEditingPlan(null)}
         onSubmit={handleUpdatePlan}
       />
-    </ThemedView>
+
+      <ConfirmDialog
+        visible={deletingPlan !== null}
+        message={`'${deletingPlan?.title}'을(를) 삭제하시겠어요?`}
+        confirmLabel="삭제"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeletingPlan(null)}
+      />
+    </Pressable>
   );
 }
 
@@ -204,10 +257,5 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: "#fff",
-  },
-  planRow: {
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
   },
 });

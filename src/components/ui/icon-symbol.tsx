@@ -21,6 +21,7 @@ const MAPPING = {
   'line.3.horizontal': 'menu',
   'person.crop.circle': 'account-circle',
   'chevron.left': 'chevron-left',
+  trash: 'delete',
 } as IconMapping;
 
 /**

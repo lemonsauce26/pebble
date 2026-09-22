@@ -11,6 +11,8 @@ import { supabase } from '@/ports/supabase';
 import { configureGoogleSignIn } from '@/ports/google-auth';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 import { ToastProvider } from '@/components/toast-provider';
 import { ErrorDialogProvider } from '@/components/error-dialog-provider';
 
@@ -43,21 +45,23 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <ToastProvider>
-        <ErrorDialogProvider>
-          <Stack>
-            <Stack.Protected guard={!!session}>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            </Stack.Protected>
-            <Stack.Protected guard={!session}>
-              <Stack.Screen name="login" options={{ headerShown: false }} />
-            </Stack.Protected>
-          </Stack>
-          <StatusBar style="auto" />
-        </ErrorDialogProvider>
-      </ToastProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <ToastProvider>
+          <ErrorDialogProvider>
+            <Stack>
+              <Stack.Protected guard={!!session}>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+              </Stack.Protected>
+              <Stack.Protected guard={!session}>
+                <Stack.Screen name="login" options={{ headerShown: false }} />
+              </Stack.Protected>
+            </Stack>
+            <StatusBar style="auto" />
+          </ErrorDialogProvider>
+        </ToastProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
