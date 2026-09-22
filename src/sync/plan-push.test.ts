@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { PlanRemote, RemotePlanRow } from "@/ports/plan-remote";
 
-import { pushPlan } from "./plan-push";
+import { pushPlan, pushPlanDeletion } from "./plan-push";
 
 function fakeRemote() {
   const upserted: RemotePlanRow[] = [];
+  const deleted: string[] = [];
   const remote: PlanRemote = {
     upsertPlan: async (row) => {
       upserted.push(row);
     },
+    deletePlan: async (id) => {
+      deleted.push(id);
+    },
   };
-  return { remote, upserted };
+  return { remote, upserted, deleted };
 }
 
 const localRow = {
@@ -46,8 +50,30 @@ describe("pushPlan", () => {
       upsertPlan: async () => {
         throw new Error("네트워크 오류");
       },
+      deletePlan: async () => {},
     };
 
     await expect(pushPlan(remote, localRow)).rejects.toThrow("네트워크 오류");
+  });
+});
+
+describe("pushPlanDeletion", () => {
+  it("삭제할 id를 클라우드에 전달한다", async () => {
+    const { remote, deleted } = fakeRemote();
+
+    await pushPlanDeletion(remote, "plan-1");
+
+    expect(deleted).toEqual(["plan-1"]);
+  });
+
+  it("삭제가 실패하면 에러를 그대로 던진다", async () => {
+    const remote: PlanRemote = {
+      upsertPlan: async () => {},
+      deletePlan: async () => {
+        throw new Error("네트워크 오류");
+      },
+    };
+
+    await expect(pushPlanDeletion(remote, "plan-1")).rejects.toThrow("네트워크 오류");
   });
 });

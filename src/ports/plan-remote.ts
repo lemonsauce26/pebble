@@ -12,11 +12,19 @@ export type RemotePlanRow = {
 
 export interface PlanRemote {
   upsertPlan(row: RemotePlanRow): Promise<void>;
+  deletePlan(id: string): Promise<void>;
 }
 
 export const supabasePlanRemote: PlanRemote = {
   async upsertPlan(row) {
     const { error } = await supabase.from("plan").upsert(row);
+    if (error) {
+      throw new Error(error.message);
+    }
+  },
+
+  async deletePlan(id) {
+    const { error } = await supabase.from("plan").delete().eq("id", id);
     if (error) {
       throw new Error(error.message);
     }

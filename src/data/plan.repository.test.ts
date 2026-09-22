@@ -6,7 +6,13 @@ import type { Clock } from "@/ports/clock";
 
 import * as schema from "./schema";
 import { plan } from "./schema";
-import { DuplicatePlanTitleError, insertPlan, selectPlans } from "./plan.repository";
+import {
+  deletePlan,
+  DuplicatePlanTitleError,
+  insertPlan,
+  selectPlans,
+  updatePlan,
+} from "./plan.repository";
 
 function fixedClock(isoDate: string): Clock {
   return { now: () => new Date(isoDate) };
@@ -195,6 +201,162 @@ describe("plan.repository", () => {
       ).not.toThrow();
 
       expect(selectPlans(db, "user-2", "month", "202609").all()).toHaveLength(1);
+    });
+  });
+
+  describe("updatePlan", () => {
+    it("제목을 바꾸면 반영된다", () => {
+      const saved = insertPlan(
+        db,
+        { userId: "user-1", type: "month", period: "202609", title: "방 정리하기" },
+        fixedClock("2026-09-19T10:00:00"),
+      );
+
+      updatePlan(
+        db,
+        { id: saved.id, userId: "user-1", type: "month", period: "202609", title: "책상 정리하기" },
+        fixedClock("2026-09-20T10:00:00"),
+      );
+
+      const plans = selectPlans(db, "user-1", "month", "202609").all();
+      expect(plans).toHaveLength(1);
+      expect(plans[0].title).toBe("책상 정리하기");
+    });
+
+    it("월을 바꾸면 그 달에서 조회된다", () => {
+      const saved = insertPlan(
+        db,
+        { userId: "user-1", type: "month", period: "202609", title: "방 정리하기" },
+        fixedClock("2026-09-19T10:00:00"),
+      );
+
+      updatePlan(
+        db,
+        { id: saved.id, userId: "user-1", type: "month", period: "202610", title: "방 정리하기" },
+        fixedClock("2026-09-20T10:00:00"),
+      );
+
+      expect(selectPlans(db, "user-1", "month", "202609").all()).toHaveLength(0);
+      expect(selectPlans(db, "user-1", "month", "202610").all()).toHaveLength(1);
+    });
+
+    it("수정 시각이 갱신된다", () => {
+      const saved = insertPlan(
+        db,
+        { userId: "user-1", type: "month", period: "202609", title: "방 정리하기" },
+        fixedClock("2026-09-19T10:00:00"),
+      );
+
+      const updated = updatePlan(
+        db,
+        { id: saved.id, userId: "user-1", type: "month", period: "202609", title: "책상 정리하기" },
+        fixedClock("2026-09-20T10:00:00"),
+      );
+
+      expect(updated.updatedAt).toEqual(new Date("2026-09-20T10:00:00"));
+      expect(updated.createdAt).toEqual(new Date("2026-09-19T10:00:00"));
+    });
+
+    it("이름을 안 바꾸고 저장해도 자기 자신은 중복으로 보지 않는다", () => {
+      const saved = insertPlan(
+        db,
+        { userId: "user-1", type: "month", period: "202609", title: "방 정리하기" },
+        fixedClock("2026-09-19T10:00:00"),
+      );
+
+      expect(() =>
+        updatePlan(
+          db,
+          { id: saved.id, userId: "user-1", type: "month", period: "202609", title: "방 정리하기" },
+          fixedClock("2026-09-20T10:00:00"),
+        ),
+      ).not.toThrow();
+    });
+
+    it("같은 달의 다른 계획과 이름이 겹치면 에러를 던진다", () => {
+      insertPlan(
+        db,
+        { userId: "user-1", type: "month", period: "202609", title: "방 정리하기" },
+        fixedClock("2026-09-19T10:00:00"),
+      );
+      const second = insertPlan(
+        db,
+        { userId: "user-1", type: "month", period: "202609", title: "책 읽기" },
+        fixedClock("2026-09-19T11:00:00"),
+      );
+
+      expect(() =>
+        updatePlan(
+          db,
+          { id: second.id, userId: "user-1", type: "month", period: "202609", title: "방 정리하기" },
+          fixedClock("2026-09-20T10:00:00"),
+        ),
+      ).toThrow(DuplicatePlanTitleError);
+    });
+
+    it("제목 앞뒤 공백은 지우고 수정한다", () => {
+      const saved = insertPlan(
+        db,
+        { userId: "user-1", type: "month", period: "202609", title: "방 정리하기" },
+        fixedClock("2026-09-19T10:00:00"),
+      );
+
+      const updated = updatePlan(
+        db,
+        { id: saved.id, userId: "user-1", type: "month", period: "202609", title: "  책상 정리하기  " },
+        fixedClock("2026-09-20T10:00:00"),
+      );
+
+      expect(updated.title).toBe("책상 정리하기");
+    });
+
+    it("빈 제목으로 수정하면 에러를 던진다", () => {
+      const saved = insertPlan(
+        db,
+        { userId: "user-1", type: "month", period: "202609", title: "방 정리하기" },
+        fixedClock("2026-09-19T10:00:00"),
+      );
+
+      expect(() =>
+        updatePlan(
+          db,
+          { id: saved.id, userId: "user-1", type: "month", period: "202609", title: "   " },
+          fixedClock("2026-09-20T10:00:00"),
+        ),
+      ).toThrow();
+    });
+  });
+
+  describe("deletePlan", () => {
+    it("삭제하면 조회되지 않는다", () => {
+      const saved = insertPlan(
+        db,
+        { userId: "user-1", type: "month", period: "202609", title: "방 정리하기" },
+        fixedClock("2026-09-19T10:00:00"),
+      );
+
+      deletePlan(db, saved.id);
+
+      expect(selectPlans(db, "user-1", "month", "202609").all()).toHaveLength(0);
+    });
+
+    it("다른 계획은 지워지지 않는다", () => {
+      const first = insertPlan(
+        db,
+        { userId: "user-1", type: "month", period: "202609", title: "방 정리하기" },
+        fixedClock("2026-09-19T10:00:00"),
+      );
+      insertPlan(
+        db,
+        { userId: "user-1", type: "month", period: "202609", title: "책 읽기" },
+        fixedClock("2026-09-19T11:00:00"),
+      );
+
+      deletePlan(db, first.id);
+
+      const plans = selectPlans(db, "user-1", "month", "202609").all();
+      expect(plans).toHaveLength(1);
+      expect(plans[0].title).toBe("책 읽기");
     });
   });
 });

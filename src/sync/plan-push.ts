@@ -10,6 +10,10 @@ type LocalPlanRow = {
   updatedAt: Date;
 };
 
+export async function pushPlanDeletion(remote: PlanRemote, id: string): Promise<void> {
+  await remote.deletePlan(id);
+}
+
 export async function pushPlan(remote: PlanRemote, row: LocalPlanRow): Promise<void> {
   await remote.upsertPlan({
     id: row.id,
