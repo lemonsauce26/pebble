@@ -6,6 +6,7 @@ import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
 import { PlanFormModal, type PlanSubmitResult } from "@/components/plan-form-modal";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SwipeToDeleteRow } from "@/components/swipe-to-delete-row";
+import { MonthSelector } from "@/components/month-selector";
 import { EmptyState } from "@/components/empty-state";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -20,7 +21,7 @@ import {
   selectPlans,
   updatePlan,
 } from "@/data/plan.repository";
-import { formatPeriodLabel, getCurrentMonthPeriod } from "@/domain/period";
+import { getCurrentMonthPeriod } from "@/domain/period";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { systemClock } from "@/ports/clock";
 import { supabasePlanRemote } from "@/ports/plan-remote";
@@ -39,8 +40,7 @@ export default function HomeScreen() {
   const [openRowId, setOpenRowId] = useState<string | null>(null);
   const backgroundColor = useThemeColor({}, "background");
 
-  const period = getCurrentMonthPeriod(systemClock);
-  const monthLabel = formatPeriodLabel("month", period);
+  const [period, setPeriod] = useState(() => getCurrentMonthPeriod(systemClock));
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
@@ -183,10 +183,16 @@ export default function HomeScreen() {
 
   return (
     <Pressable style={[styles.container, { backgroundColor }]} onPress={() => setOpenRowId(null)}>
-      <ThemedView style={styles.headerRow}>
-        <ThemedText type="title">{monthLabel}</ThemedText>
-        <TouchableOpacity style={styles.addButton} onPress={() => setIsAddModalOpen(true)}>
-          <ThemedText style={styles.addButtonText}>추가</ThemedText>
+      <MonthSelector period={period} onChange={setPeriod} labelType="title" />
+
+      <ThemedView style={styles.addButtonRow}>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => setIsAddModalOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="계획 추가"
+        >
+          <ThemedText style={styles.addButtonText}>+</ThemedText>
         </TouchableOpacity>
       </ThemedView>
 
@@ -214,6 +220,7 @@ export default function HomeScreen() {
       <PlanFormModal
         visible={isAddModalOpen}
         mode="add"
+        initialPeriod={period}
         onClose={() => setIsAddModalOpen(false)}
         onSubmit={handleAddPlan}
       />
@@ -244,18 +251,21 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
-  headerRow: {
+  addButtonRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
   },
   addButton: {
     backgroundColor: "#208AEF",
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
   },
   addButtonText: {
     color: "#fff",
+    fontSize: 22,
+    lineHeight: 26,
   },
 });

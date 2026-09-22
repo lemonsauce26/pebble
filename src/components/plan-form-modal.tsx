@@ -1,33 +1,13 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, TextInput, TouchableOpacity } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 
+import { MonthSelector } from "@/components/month-selector";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ERROR_CODES } from "@/constants/error-codes";
-import {
-  formatPeriodLabel,
-  getCurrentMonthPeriod,
-  parseMonthPeriod,
-  shiftMonthPeriod,
-  toMonthPeriod,
-} from "@/domain/period";
+import { getCurrentMonthPeriod } from "@/domain/period";
 import { createPlan } from "@/domain/plan";
-import { useThemeColor } from "@/hooks/use-theme-color";
 import { systemClock } from "@/ports/clock";
-
-const YEAR_RANGE = 5;
-
-function buildYearOptions(currentYear: number): number[] {
-  const years: number[] = [];
-  for (let year = currentYear - YEAR_RANGE; year <= currentYear + YEAR_RANGE; year += 1) {
-    years.push(year);
-  }
-  return years;
-}
-
-const MONTH_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 
 /** DB 작업 결과. 실패하면 같은 모달 안에서 실패 안내로 바뀐다. */
 export type PlanSubmitResult = { ok: true } | { ok: false; code: string; message: string };
@@ -47,11 +27,9 @@ export function PlanFormModal({
   onClose: () => void;
   onSubmit: (input: { title: string; period: string }) => PlanSubmitResult;
 }) {
-  const iconColor = useThemeColor({}, "text");
   const [title, setTitle] = useState(initialTitle);
   const [period, setPeriod] = useState(() => initialPeriod ?? getCurrentMonthPeriod(systemClock));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [failure, setFailure] = useState<{ code: string; message: string } | null>(null);
 
   // 모달이 열릴 때마다 지금 편집할 계획의 값으로 다시 채운다.
@@ -60,13 +38,10 @@ export function PlanFormModal({
       setTitle(initialTitle);
       setPeriod(initialPeriod ?? getCurrentMonthPeriod(systemClock));
       setErrorMessage(null);
-      setIsPickerOpen(false);
       setFailure(null);
     }
   }, [visible, initialTitle, initialPeriod]);
 
-  const { year: selectedYear, month: selectedMonth } = parseMonthPeriod(period);
-  const yearOptions = buildYearOptions(parseMonthPeriod(getCurrentMonthPeriod(systemClock)).year);
   const actionLabel = mode === "add" ? "추가" : "수정";
 
   function handleSubmit() {
@@ -141,63 +116,7 @@ export function PlanFormModal({
               {errorMessage ? <ThemedText style={styles.error}>{errorMessage}</ThemedText> : null}
             </ThemedView>
 
-            <ThemedView style={styles.field}>
-              <ThemedView style={styles.monthRow}>
-                <TouchableOpacity
-                  onPress={() => setPeriod(shiftMonthPeriod(period, -1))}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="이전 달"
-                >
-                  <IconSymbol name="chevron.left" size={20} color={iconColor} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setIsPickerOpen((open) => !open)}
-                  accessibilityRole="button"
-                  accessibilityLabel="년월 선택"
-                >
-                  <ThemedText>{formatPeriodLabel("month", period)}</ThemedText>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setPeriod(shiftMonthPeriod(period, 1))}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="다음 달"
-                >
-                  <IconSymbol name="chevron.right" size={20} color={iconColor} />
-                </TouchableOpacity>
-              </ThemedView>
-
-              {isPickerOpen ? (
-                <ThemedView style={styles.pickerRow}>
-                  <Picker
-                    style={styles.picker}
-                    itemStyle={styles.pickerItem}
-                    selectedValue={selectedYear}
-                    onValueChange={(year) => setPeriod(toMonthPeriod(Number(year), selectedMonth))}
-                  >
-                    {yearOptions.map((year) => (
-                      <Picker.Item key={year} label={`${year}년`} value={year} color={iconColor} />
-                    ))}
-                  </Picker>
-                  <Picker
-                    style={styles.picker}
-                    itemStyle={styles.pickerItem}
-                    selectedValue={selectedMonth}
-                    onValueChange={(month) => setPeriod(toMonthPeriod(selectedYear, Number(month)))}
-                  >
-                    {MONTH_OPTIONS.map((month) => (
-                      <Picker.Item
-                        key={month}
-                        label={`${month}월`}
-                        value={month}
-                        color={iconColor}
-                      />
-                    ))}
-                  </Picker>
-                </ThemedView>
-              ) : null}
-            </ThemedView>
+            <MonthSelector period={period} onChange={setPeriod} rowStyle={styles.monthRow} />
 
             <ThemedView style={styles.buttonRow}>
               <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={onClose}>
@@ -248,15 +167,6 @@ const styles = StyleSheet.create({
   error: {
     color: "#d33",
     fontSize: 13,
-  },
-  pickerRow: {
-    flexDirection: "row",
-  },
-  picker: {
-    flex: 1,
-  },
-  pickerItem: {
-    fontSize: 20,
   },
   monthRow: {
     flexDirection: "row",
