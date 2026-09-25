@@ -10,6 +10,7 @@ export default function MainLayout() {
         header: () => <TopBar />,
       }}>
       <Stack.Screen name="index" />
+      <Stack.Screen name="weekly" />
       <Stack.Screen name="explore" />
     </Stack>
   );

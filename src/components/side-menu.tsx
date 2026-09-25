@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, Modal, Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 import { ThemedText } from "@/components/themed-text";
 import { useToast } from "@/components/toast-provider";
@@ -15,6 +16,7 @@ export function SideMenu({ visible, onClose }: { visible: boolean; onClose: () =
   const insets = useSafeAreaInsets();
   const backgroundColor = useThemeColor({}, "background");
   const { showToast } = useToast();
+  const router = useRouter();
   const translateX = useRef(new Animated.Value(SIDE_MENU_WIDTH)).current;
   const [isMounted, setIsMounted] = useState(visible);
 
@@ -35,6 +37,12 @@ export function SideMenu({ visible, onClose }: { visible: boolean; onClose: () =
     }
   }, [visible, translateX]);
 
+  // 메뉴 항목은 하위 화면이 아니라 갈아타는 목적지라서 쌓지 않고 바꿔 끼운다.
+  function handleNavigate(path: "/" | "/weekly") {
+    onClose();
+    router.replace(path);
+  }
+
   function handlePressLogout() {
     onClose();
     signOut();
@@ -54,7 +62,14 @@ export function SideMenu({ visible, onClose }: { visible: boolean; onClose: () =
           { width: SIDE_MENU_WIDTH, backgroundColor, paddingTop: insets.top, transform: [{ translateX }] },
         ]}
       >
-        <View style={styles.content} />
+        <View style={styles.content}>
+          <TouchableOpacity style={styles.menuRow} onPress={() => handleNavigate("/")}>
+            <ThemedText>먼슬리 주머니</ThemedText>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuRow} onPress={() => handleNavigate("/weekly")}>
+            <ThemedText>위클리 주머니</ThemedText>
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity
           style={[styles.logoutRow, { paddingBottom: insets.bottom + 16 }]}
           onPress={handlePressLogout}
@@ -79,6 +94,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    paddingTop: 8,
+  },
+  menuRow: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
   },
   logoutRow: {
     paddingHorizontal: 20,
