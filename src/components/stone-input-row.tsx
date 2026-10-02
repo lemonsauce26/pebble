@@ -1,11 +1,28 @@
-import { useState } from "react";
-import { StyleSheet, TextInput, TouchableOpacity } from "react-native";
+import { useRef, useState } from "react";
+import {
+  InputAccessoryView,
+  Platform,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { createStone, type NewStone, type StoneKind } from "@/domain/stone";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useThemeColor } from "@/hooks/use-theme-color";
+
+/**
+ * 완료 바는 입력칸마다 따로 둔다. iOS에서 뷰 하나는 한 곳에만 붙을 수 있어서,
+ * 두 입력칸이 같은 바를 가리키면 둘 중 하나에는 안 붙는다.
+ */
+const ACCESSORY_IDS = { title: "stone-title-accessory", target: "stone-target-accessory" };
+
+/** iOS 키보드 배경색. 완료 바가 키보드에 붙어 있는 것처럼 보이게 맞춘다. */
+const KEYBOARD_BACKGROUND = { light: "#E8E8ED", dark: "#2C2C2E" };
 
 const KIND_OPTIONS: { kind: StoneKind; label: string }[] = [
   { kind: "weekly", label: "이번 주에 한 번" },
@@ -19,6 +36,8 @@ const KIND_OPTIONS: { kind: StoneKind; label: string }[] = [
  */
 export function StoneInputRow({ onSubmit }: { onSubmit: (input: NewStone) => boolean }) {
   const iconColor = useThemeColor({}, "text");
+  const colorScheme = useColorScheme();
+  const titleInputRef = useRef<TextInput>(null);
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<StoneKind>("weekly");
   const [targetText, setTargetText] = useState("");
@@ -48,6 +67,30 @@ export function StoneInputRow({ onSubmit }: { onSubmit: (input: NewStone) => boo
     setTargetText("");
     setIsKindOpen(false);
     setErrorMessage(null);
+
+    // 횟수 칸에서 담으면 그 칸이 사라지며 키보드까지 닫힌다. 이름 칸으로 넘겨 흐름을 잇는다.
+    titleInputRef.current?.focus();
+  }
+
+  function renderDoneBar(nativeID: string) {
+    return (
+      <InputAccessoryView nativeID={nativeID}>
+        <View
+          style={[
+            styles.accessoryBar,
+            { backgroundColor: KEYBOARD_BACKGROUND[colorScheme ?? "light"] },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.accessoryButton}
+            onPress={handleSubmit}
+            accessibilityRole="button"
+          >
+            <ThemedText style={styles.accessoryText}>완료</ThemedText>
+          </TouchableOpacity>
+        </View>
+      </InputAccessoryView>
+    );
   }
 
   return (
@@ -55,6 +98,7 @@ export function StoneInputRow({ onSubmit }: { onSubmit: (input: NewStone) => boo
       <ThemedView style={styles.inputRow}>
         <ThemedView style={styles.inputBox}>
           <TextInput
+            ref={titleInputRef}
             style={styles.input}
             value={title}
             onChangeText={setTitle}
@@ -62,6 +106,7 @@ export function StoneInputRow({ onSubmit }: { onSubmit: (input: NewStone) => boo
             autoFocus
             submitBehavior="submit"
             onSubmitEditing={handleSubmit}
+            inputAccessoryViewID={Platform.OS === "ios" ? ACCESSORY_IDS.title : undefined}
           />
         </ThemedView>
         <TouchableOpacity
@@ -109,12 +154,19 @@ export function StoneInputRow({ onSubmit }: { onSubmit: (input: NewStone) => boo
                 keyboardType="number-pad"
                 placeholder="3"
                 maxLength={2}
+                // 숫자 키보드에는 리턴 키가 없어서 완료 바가 유일한 확정 수단이다.
+                inputAccessoryViewID={Platform.OS === "ios" ? ACCESSORY_IDS.target : undefined}
+                submitBehavior="submit"
+                onSubmitEditing={handleSubmit}
               />
               <ThemedText style={styles.targetLabel}>번</ThemedText>
             </ThemedView>
           ) : null}
         </ThemedView>
       ) : null}
+
+      {Platform.OS === "ios" ? renderDoneBar(ACCESSORY_IDS.title) : null}
+      {Platform.OS === "ios" && kind === "weekly_n" ? renderDoneBar(ACCESSORY_IDS.target) : null}
     </ThemedView>
   );
 }
@@ -182,6 +234,22 @@ const styles = StyleSheet.create({
   targetLabel: {
     fontSize: 13,
     opacity: 0.7,
+  },
+  accessoryBar: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    height: 44,
+    paddingHorizontal: 12,
+  },
+  accessoryButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  accessoryText: {
+    color: "#208AEF",
+    fontSize: 16,
+    fontWeight: "600",
   },
   targetInput: {
     borderWidth: 1,
