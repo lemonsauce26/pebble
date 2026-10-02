@@ -22,6 +22,10 @@ const MAPPING = {
   'person.crop.circle': 'account-circle',
   'chevron.left': 'chevron-left',
   trash: 'delete',
+  checkmark: 'check',
+  repeat: 'repeat',
+  'chevron.down': 'expand-more',
+  'chevron.up': 'expand-less',
 } as IconMapping;
 
 /**
