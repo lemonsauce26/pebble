@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Clock } from "@/ports/clock";
 
 import * as schema from "./schema";
-import { insertStone, selectStones } from "./stone.repository";
+import { insertStone, selectStones, updateStone } from "./stone.repository";
 
 function fixedClock(isoDate: string): Clock {
   return { now: () => new Date(isoDate) };
@@ -119,6 +119,91 @@ describe("stone.repository", () => {
         clock,
       ),
     ).toThrow("주 몇 번 할지 입력해주세요.");
+  });
+
+  it("제목을 고치면 반영된다", () => {
+    const saved = insertStone(
+      db,
+      { userId: "user-1", pocketId: "pocket-1", planId: null, title: "운동", kind: "weekly" },
+      clock,
+    );
+
+    const updated = updateStone(db, { id: saved.id, title: "가볍게 걷기", kind: "weekly" }, clock);
+
+    expect(updated.title).toBe("가볍게 걷기");
+    expect(selectStones(db, "pocket-1").all()[0].title).toBe("가볍게 걷기");
+  });
+
+  it("주간에서 주 N회로 바꾸면 목표 횟수가 생긴다", () => {
+    const saved = insertStone(
+      db,
+      { userId: "user-1", pocketId: "pocket-1", planId: null, title: "운동", kind: "weekly" },
+      clock,
+    );
+
+    const updated = updateStone(
+      db,
+      { id: saved.id, title: "운동", kind: "weekly_n", weeklyNTarget: 3 },
+      clock,
+    );
+
+    expect(updated.kind).toBe("weekly_n");
+    expect(updated.weeklyNTarget).toBe(3);
+  });
+
+  it("주 N회에서 주간으로 바꾸면 목표 횟수가 비워진다", () => {
+    const saved = insertStone(
+      db,
+      {
+        userId: "user-1",
+        pocketId: "pocket-1",
+        planId: null,
+        title: "운동",
+        kind: "weekly_n",
+        weeklyNTarget: 3,
+      },
+      clock,
+    );
+
+    const updated = updateStone(db, { id: saved.id, title: "운동", kind: "weekly" }, clock);
+
+    expect(updated.kind).toBe("weekly");
+    expect(updated.weeklyNTarget).toBeNull();
+  });
+
+  it("고칠 때도 빈 제목은 거부한다", () => {
+    const saved = insertStone(
+      db,
+      { userId: "user-1", pocketId: "pocket-1", planId: null, title: "운동", kind: "weekly" },
+      clock,
+    );
+
+    expect(() => updateStone(db, { id: saved.id, title: "  ", kind: "weekly" }, clock)).toThrow(
+      "조약돌 이름을 입력해주세요.",
+    );
+    expect(selectStones(db, "pocket-1").all()[0].title).toBe("운동");
+  });
+
+  it("없는 조약돌을 고치려 하면 거부한다", () => {
+    expect(() =>
+      updateStone(db, { id: "없는-아이디", title: "운동", kind: "weekly" }, clock),
+    ).toThrow("고칠 조약돌을 찾지 못했습니다");
+  });
+
+  it("고치면 수정 시각이 갱신된다", () => {
+    const saved = insertStone(
+      db,
+      { userId: "user-1", pocketId: "pocket-1", planId: null, title: "운동", kind: "weekly" },
+      fixedClock("2026-09-25T10:00:00"),
+    );
+
+    const updated = updateStone(
+      db,
+      { id: saved.id, title: "운동하기", kind: "weekly" },
+      fixedClock("2026-09-26T09:00:00"),
+    );
+
+    expect(updated.updatedAt.getTime()).toBeGreaterThan(saved.createdAt.getTime());
   });
 
   it("거부된 조약돌은 저장되지 않는다", () => {

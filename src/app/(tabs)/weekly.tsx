@@ -14,7 +14,7 @@ import migrations from "@/data/migrations/migrations";
 import { selectPlans } from "@/data/plan.repository";
 import { findPocketContaining, getOrCreatePocket } from "@/data/pocket.repository";
 import { stone as stoneTable } from "@/data/schema";
-import { insertStone, selectStones } from "@/data/stone.repository";
+import { insertStone, selectStones, updateStone } from "@/data/stone.repository";
 import { toMonthPeriod } from "@/domain/period";
 import type { NewStone } from "@/domain/stone";
 import { formatWeekLabel, getCurrentWeekRange } from "@/domain/week";
@@ -35,6 +35,7 @@ export default function WeeklyScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [pocketId, setPocketId] = useState<string | null>(null);
   const [activeSectionKey, setActiveSectionKey] = useState<string | null>(null);
+  const [editingStoneId, setEditingStoneId] = useState<string | null>(null);
   const [weekRange] = useState(() => getCurrentWeekRange(systemClock));
   const scrollRef = useRef<ScrollView>(null);
   const sectionLayouts = useRef<Record<string, { y: number; height: number }>>({});
@@ -166,9 +167,45 @@ export default function WeeklyScreen() {
   }
 
   function openSection(sectionKey: string) {
+    setEditingStoneId(null);
     setActiveSectionKey(sectionKey);
     // 키보드가 올라와야 스크롤 여유가 생기므로 한 박자 기다린다.
     setTimeout(() => scrollSectionIntoView(sectionKey), 250);
+  }
+
+  function openEditor(stoneId: string, sectionKey: string) {
+    setActiveSectionKey(null);
+    setEditingStoneId(stoneId);
+    setTimeout(() => scrollSectionIntoView(sectionKey), 250);
+  }
+
+  function closeInputs() {
+    setActiveSectionKey(null);
+    setEditingStoneId(null);
+  }
+
+  function handleUpdateStone(stoneId: string, input: NewStone): boolean {
+    try {
+      updateStone(
+        db,
+        {
+          id: stoneId,
+          title: input.title,
+          kind: input.kind,
+          weeklyNTarget: input.weeklyNTarget,
+        },
+        systemClock,
+      );
+      setEditingStoneId(null);
+      return true;
+    } catch (error) {
+      showErrorDialog({
+        action: "수정",
+        code: ERROR_CODES.STONE_UPDATE_FAILED,
+        message: error instanceof Error ? error.message : "조약돌을 고치지 못했습니다.",
+      });
+      return false;
+    }
   }
 
   function renderSection(
@@ -178,6 +215,8 @@ export default function WeeklyScreen() {
     planId: string | null,
   ) {
     const isEmpty = sectionStones.length === 0;
+    const hasOpenInput =
+      activeSectionKey === sectionKey || sectionStones.some((item) => item.id === editingStoneId);
 
     return (
       <ThemedView
@@ -189,21 +228,26 @@ export default function WeeklyScreen() {
           sectionLayouts.current[sectionKey] = { y, height };
 
           // 종류 패널을 펼치면 섹션이 길어진다. 그때도 가려지지 않게 다시 맞춘다.
-          if (sectionKey === activeSectionKey && previous?.height !== height) {
+          if (hasOpenInput && previous?.height !== height) {
             scrollSectionIntoView(sectionKey);
           }
         }}
       >
         <ThemedText type="defaultSemiBold">{heading}</ThemedText>
 
-        {sectionStones.map((item) => (
-          <StoneRow
-            key={item.id}
-            title={item.title}
-            kind={item.kind}
-            weeklyNTarget={item.weeklyNTarget}
-          />
-        ))}
+        {sectionStones.map((item) =>
+          editingStoneId === item.id ? (
+            <StoneInputRow
+              key={item.id}
+              initial={{ title: item.title, kind: item.kind, weeklyNTarget: item.weeklyNTarget }}
+              onSubmit={(input) => handleUpdateStone(item.id, input)}
+            />
+          ) : (
+            <TouchableOpacity key={item.id} onPress={() => openEditor(item.id, sectionKey)}>
+              <StoneRow title={item.title} kind={item.kind} weeklyNTarget={item.weeklyNTarget} />
+            </TouchableOpacity>
+          ),
+        )}
 
         {activeSectionKey === sectionKey ? (
           <StoneInputRow onSubmit={(input) => handleAddStone(planId, input)} />
@@ -236,9 +280,9 @@ export default function WeeklyScreen() {
         onScroll={(event) => {
           scrollOffset.current = event.nativeEvent.contentOffset.y;
         }}
-        onScrollBeginDrag={() => setActiveSectionKey(null)}
+        onScrollBeginDrag={closeInputs}
       >
-        <Pressable style={styles.flex} onPress={() => setActiveSectionKey(null)}>
+        <Pressable style={styles.flex} onPress={closeInputs}>
           <ThemedText type="title">{formatWeekLabel(weekRange)}</ThemedText>
 
           {plans && plans.length > 0 && emptyPlanCount > 0 ? (

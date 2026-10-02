@@ -48,3 +48,32 @@ export function insertStone(
 
   return row;
 }
+
+export function updateStone(
+  db: Db,
+  input: { id: string; title: string; kind: StoneKind; weeklyNTarget?: number | null },
+  clock: Clock,
+) {
+  const validated = createStone({
+    title: input.title,
+    kind: input.kind,
+    weeklyNTarget: input.weeklyNTarget,
+  });
+
+  db.update(stone)
+    .set({
+      title: validated.title,
+      kind: validated.kind,
+      weeklyNTarget: validated.weeklyNTarget,
+      updatedAt: clock.now(),
+    })
+    .where(eq(stone.id, input.id))
+    .run();
+
+  const updated = db.select().from(stone).where(eq(stone.id, input.id)).all()[0];
+  if (!updated) {
+    throw new Error("고칠 조약돌을 찾지 못했습니다");
+  }
+
+  return updated;
+}

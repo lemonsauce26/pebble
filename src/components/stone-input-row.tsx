@@ -33,15 +33,26 @@ const KIND_OPTIONS: { kind: StoneKind; label: string }[] = [
 /**
  * 조약돌을 쏟아내기 위한 입력줄. 엔터를 치면 확정되고 입력창이 비워져서 바로 다음 것을 받는다.
  * 모달이 아니라 목록 안에 그대로 사는 컴포넌트다 — 모달 위에 모달을 띄우는 문제를 피한다.
+ *
+ * `initial`을 주면 고치기 모드가 된다. 이때는 담은 뒤 비우지 않는다 (화면이 닫는다).
  */
-export function StoneInputRow({ onSubmit }: { onSubmit: (input: NewStone) => boolean }) {
+export function StoneInputRow({
+  initial,
+  onSubmit,
+}: {
+  initial?: NewStone;
+  onSubmit: (input: NewStone) => boolean;
+}) {
   const iconColor = useThemeColor({}, "text");
   const colorScheme = useColorScheme();
   const titleInputRef = useRef<TextInput>(null);
-  const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<StoneKind>("weekly");
-  const [targetText, setTargetText] = useState("");
-  const [isKindOpen, setIsKindOpen] = useState(false);
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [kind, setKind] = useState<StoneKind>(initial?.kind ?? "weekly");
+  const [targetText, setTargetText] = useState(
+    initial?.weeklyNTarget != null ? String(initial.weeklyNTarget) : "",
+  );
+  // 입력줄만 봐서는 종류를 알 수 없으므로, 기본값이 아닌 조약돌을 고칠 때는 펼쳐서 보여준다.
+  const [isKindOpen, setIsKindOpen] = useState(initial != null && initial.kind !== "weekly");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   function handleSubmit() {
@@ -59,6 +70,10 @@ export function StoneInputRow({ onSubmit }: { onSubmit: (input: NewStone) => boo
 
     // 저장이 실패하면 화면이 모달로 알린다. 입력값은 그대로 두어 다시 시도할 수 있게 한다.
     if (!onSubmit(validated)) {
+      return;
+    }
+
+    if (initial) {
       return;
     }
 
