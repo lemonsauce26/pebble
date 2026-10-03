@@ -38,7 +38,7 @@ export function SideMenu({ visible, onClose }: { visible: boolean; onClose: () =
   }, [visible, translateX]);
 
   // 메뉴 항목은 하위 화면이 아니라 갈아타는 목적지라서 쌓지 않고 바꿔 끼운다.
-  function handleNavigate(path: "/" | "/weekly") {
+  function handleNavigate(path: "/today" | "/monthly" | "/weekly") {
     onClose();
     router.replace(path);
   }
@@ -63,7 +63,10 @@ export function SideMenu({ visible, onClose }: { visible: boolean; onClose: () =
         ]}
       >
         <View style={styles.content}>
-          <TouchableOpacity style={styles.menuRow} onPress={() => handleNavigate("/")}>
+          <TouchableOpacity style={styles.menuRow} onPress={() => handleNavigate("/today")}>
+            <ThemedText>오늘의 조약돌</ThemedText>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuRow} onPress={() => handleNavigate("/monthly")}>
             <ThemedText>먼슬리 주머니</ThemedText>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuRow} onPress={() => handleNavigate("/weekly")}>
