@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Clock } from "@/ports/clock";
 
 import * as schema from "./schema";
-import { insertStone, selectStones, updateStone } from "./stone.repository";
+import { deleteStone, insertStone, selectStones, updateStone } from "./stone.repository";
 
 function fixedClock(isoDate: string): Clock {
   return { now: () => new Date(isoDate) };
@@ -204,6 +204,35 @@ describe("stone.repository", () => {
     );
 
     expect(updated.updatedAt.getTime()).toBeGreaterThan(saved.createdAt.getTime());
+  });
+
+  it("빼낸 조약돌은 목록에서 사라진다", () => {
+    const saved = insertStone(
+      db,
+      { userId: "user-1", pocketId: "pocket-1", planId: null, title: "운동", kind: "weekly" },
+      clock,
+    );
+
+    deleteStone(db, saved.id);
+
+    expect(selectStones(db, "pocket-1").all()).toHaveLength(0);
+  });
+
+  it("뺄 때 다른 조약돌은 건드리지 않는다", () => {
+    const first = insertStone(
+      db,
+      { userId: "user-1", pocketId: "pocket-1", planId: null, title: "운동", kind: "weekly" },
+      clock,
+    );
+    insertStone(
+      db,
+      { userId: "user-1", pocketId: "pocket-1", planId: null, title: "독서", kind: "weekly" },
+      clock,
+    );
+
+    deleteStone(db, first.id);
+
+    expect(selectStones(db, "pocket-1").all().map((row) => row.title)).toEqual(["독서"]);
   });
 
   it("거부된 조약돌은 저장되지 않는다", () => {

@@ -3,9 +3,11 @@ import { Keyboard, Pressable, ScrollView, StyleSheet, TouchableOpacity } from "r
 import { useLiveQuery } from "drizzle-orm/expo-sqlite";
 import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
 
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useErrorDialog } from "@/components/error-dialog-provider";
 import { StoneInputRow } from "@/components/stone-input-row";
 import { StoneRow } from "@/components/stone-row";
+import { SwipeToDeleteRow } from "@/components/swipe-to-delete-row";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { ERROR_CODES } from "@/constants/error-codes";
@@ -14,7 +16,7 @@ import migrations from "@/data/migrations/migrations";
 import { selectPlans } from "@/data/plan.repository";
 import { findPocketContaining, getOrCreatePocket } from "@/data/pocket.repository";
 import { stone as stoneTable } from "@/data/schema";
-import { insertStone, selectStones, updateStone } from "@/data/stone.repository";
+import { deleteStone, insertStone, selectStones, updateStone } from "@/data/stone.repository";
 import { toMonthPeriod } from "@/domain/period";
 import type { NewStone } from "@/domain/stone";
 import { formatWeekLabel, getCurrentWeekRange } from "@/domain/week";
@@ -36,6 +38,8 @@ export default function WeeklyScreen() {
   const [pocketId, setPocketId] = useState<string | null>(null);
   const [activeSectionKey, setActiveSectionKey] = useState<string | null>(null);
   const [editingStoneId, setEditingStoneId] = useState<string | null>(null);
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
+  const [deletingStone, setDeletingStone] = useState<{ id: string; title: string } | null>(null);
   const [weekRange] = useState(() => getCurrentWeekRange(systemClock));
   const scrollRef = useRef<ScrollView>(null);
   const sectionLayouts = useRef<Record<string, { y: number; height: number }>>({});
@@ -168,6 +172,7 @@ export default function WeeklyScreen() {
 
   function openSection(sectionKey: string) {
     setEditingStoneId(null);
+    setOpenRowId(null);
     setActiveSectionKey(sectionKey);
     // 키보드가 올라와야 스크롤 여유가 생기므로 한 박자 기다린다.
     setTimeout(() => scrollSectionIntoView(sectionKey), 250);
@@ -175,6 +180,7 @@ export default function WeeklyScreen() {
 
   function openEditor(stoneId: string, sectionKey: string) {
     setActiveSectionKey(null);
+    setOpenRowId(null);
     setEditingStoneId(stoneId);
     setTimeout(() => scrollSectionIntoView(sectionKey), 250);
   }
@@ -182,6 +188,43 @@ export default function WeeklyScreen() {
   function closeInputs() {
     setActiveSectionKey(null);
     setEditingStoneId(null);
+    setOpenRowId(null);
+  }
+
+  // 다른 줄을 쓸어 삭제 버튼을 꺼내면 고치던 것은 취소된다. 둘이 동시에 열려 있으면 혼란스럽다.
+  function openDeleteButton(stoneId: string) {
+    setActiveSectionKey(null);
+    setEditingStoneId(null);
+    setOpenRowId(stoneId);
+  }
+
+  // 삭제 버튼이 열려 있을 때 다른 곳을 누르면 고치기로 넘어가지 않고 먼저 닫는다.
+  function handlePressStone(stoneId: string, sectionKey: string) {
+    if (openRowId !== null) {
+      setOpenRowId(null);
+      return;
+    }
+    openEditor(stoneId, sectionKey);
+  }
+
+  function handleConfirmDelete() {
+    const target = deletingStone;
+    if (!target) {
+      return;
+    }
+
+    setDeletingStone(null);
+    setOpenRowId(null);
+
+    try {
+      deleteStone(db, target.id);
+    } catch (error) {
+      showErrorDialog({
+        action: "삭제",
+        code: ERROR_CODES.STONE_DELETE_FAILED,
+        message: error instanceof Error ? error.message : "조약돌을 빼내지 못했습니다.",
+      });
+    }
   }
 
   function handleUpdateStone(stoneId: string, input: NewStone): boolean {
@@ -243,9 +286,16 @@ export default function WeeklyScreen() {
               onSubmit={(input) => handleUpdateStone(item.id, input)}
             />
           ) : (
-            <TouchableOpacity key={item.id} onPress={() => openEditor(item.id, sectionKey)}>
+            <SwipeToDeleteRow
+              key={item.id}
+              isOpen={openRowId === item.id}
+              onRequestOpen={() => openDeleteButton(item.id)}
+              onRequestClose={() => setOpenRowId(null)}
+              onPressRow={() => handlePressStone(item.id, sectionKey)}
+              onPressDelete={() => setDeletingStone({ id: item.id, title: item.title })}
+            >
               <StoneRow title={item.title} kind={item.kind} weeklyNTarget={item.weeklyNTarget} />
-            </TouchableOpacity>
+            </SwipeToDeleteRow>
           ),
         )}
 
@@ -304,6 +354,14 @@ export default function WeeklyScreen() {
           {renderSection(LOOSE_SECTION_KEY, "이번 달 계획과 상관없이", looseStones, null)}
         </Pressable>
       </ScrollView>
+
+      <ConfirmDialog
+        visible={deletingStone !== null}
+        message={`'${deletingStone?.title}'을(를) 삭제하시겠어요?`}
+        confirmLabel="삭제"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeletingStone(null)}
+      />
     </ThemedView>
   );
 }

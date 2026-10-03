@@ -77,3 +77,7 @@ export function updateStone(
 
   return updated;
 }
+
+export function deleteStone(db: Db, id: string) {
+  db.delete(stone).where(eq(stone.id, id)).run();
+}
