@@ -8,3 +8,6 @@
  * "방금 뽑은 조약돌이 사라지는" 경험을 하게 된다.
  */
 export const DAY_BOUNDARY_HOUR = 1;
+
+/** 하루에 뽑는 조약돌 개수. */
+export const DRAW_COUNT = 3;

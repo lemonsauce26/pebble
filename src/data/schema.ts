@@ -20,6 +20,30 @@ export const pocket = sqliteTable("pocket", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+/**
+ * 하루 한 번의 뽑기. 날짜는 새벽 1시 기준이라 밤 12시 30분은 아직 어제다.
+ * 미완료 조약돌의 복귀는 따로 하는 일이 없다 — 날이 바뀌면 어제 뽑기를 더 이상 보지 않을 뿐이다.
+ */
+export const dailyDraw = sqliteTable("daily_draw", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  drawDate: text("draw_date").notNull(),
+  pocketId: text("pocket_id").notNull(),
+  rerollCount: integer("reroll_count").notNull().default(0),
+  confirmedAt: integer("confirmed_at", { mode: "timestamp" }),
+  restedAt: integer("rested_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const dailyDrawStone = sqliteTable("daily_draw_stone", {
+  id: text("id").primaryKey(),
+  drawId: text("draw_id").notNull(),
+  stoneId: text("stone_id").notNull(),
+  cantDoAt: integer("cant_do_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
 export const stone = sqliteTable("stone", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
