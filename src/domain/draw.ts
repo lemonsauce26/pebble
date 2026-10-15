@@ -1,5 +1,10 @@
+import { REROLL_LIMIT } from "@/constants/draw";
 import type { Random } from "@/ports/random";
 import type { StoneKind } from "./stone";
+
+export function remainingRerolls(rerollCount: number): number {
+  return Math.max(0, REROLL_LIMIT - rerollCount);
+}
 
 /**
  * 뽑기 대상은 주간 조약돌뿐이다.

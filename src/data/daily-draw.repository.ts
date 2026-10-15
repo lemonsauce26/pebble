@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { ExpoSQLiteDatabase } from "drizzle-orm/expo-sqlite";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { remainingRerolls } from "@/domain/draw";
 import type { Clock } from "@/ports/clock";
 
 import { dailyDraw, dailyDrawStone, stone } from "./schema";
@@ -26,6 +27,53 @@ export function selectDrawnStones(db: Db, drawId: string) {
     .orderBy(asc(stone.createdAt));
 }
 
+function findDrawById(db: Db, drawId: string) {
+  const draw = db.select().from(dailyDraw).where(eq(dailyDraw.id, drawId)).all()[0];
+  if (!draw) {
+    throw new Error("뽑기를 찾지 못했습니다");
+  }
+  return draw;
+}
+
+function replaceDrawnStones(db: Db, drawId: string, stoneIds: string[], now: Date) {
+  db.delete(dailyDrawStone).where(eq(dailyDrawStone.drawId, drawId)).run();
+
+  for (const stoneId of stoneIds) {
+    db.insert(dailyDrawStone)
+      .values({ id: crypto.randomUUID(), drawId, stoneId, cantDoAt: null, createdAt: now })
+      .run();
+  }
+}
+
+/** 다시 뽑기는 새 기록을 만들지 않고 그날의 뽑기를 갈아끼운다. */
+export function rerollDraw(db: Db, drawId: string, stoneIds: string[], clock: Clock) {
+  const draw = findDrawById(db, drawId);
+
+  if (draw.confirmedAt !== null) {
+    throw new Error("이미 확정한 뽑기는 다시 뽑을 수 없어요");
+  }
+  if (remainingRerolls(draw.rerollCount) === 0) {
+    throw new Error("다시 뽑기를 모두 썼어요");
+  }
+
+  const now = clock.now();
+  replaceDrawnStones(db, drawId, stoneIds, now);
+  db.update(dailyDraw)
+    .set({ rerollCount: draw.rerollCount + 1, updatedAt: now })
+    .where(eq(dailyDraw.id, drawId))
+    .run();
+
+  return findDrawById(db, drawId);
+}
+
+export function confirmDraw(db: Db, drawId: string, clock: Clock) {
+  const now = clock.now();
+
+  db.update(dailyDraw).set({ confirmedAt: now, updatedAt: now }).where(eq(dailyDraw.id, drawId)).run();
+
+  return findDrawById(db, drawId);
+}
+
 export function createDraw(
   db: Db,
   input: { userId: string; drawDate: string; pocketId: string; stoneIds: string[] },
@@ -45,12 +93,7 @@ export function createDraw(
   };
 
   db.insert(dailyDraw).values(row).run();
-
-  for (const stoneId of input.stoneIds) {
-    db.insert(dailyDrawStone)
-      .values({ id: crypto.randomUUID(), drawId: row.id, stoneId, cantDoAt: null, createdAt: now })
-      .run();
-  }
+  replaceDrawnStones(db, row.id, input.stoneIds, now);
 
   return row;
 }

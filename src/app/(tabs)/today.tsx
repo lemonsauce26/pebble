@@ -8,24 +8,33 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { DRAW_COUNT } from "@/constants/draw";
 import { ERROR_CODES } from "@/constants/error-codes";
-import { createDraw, findDrawByDate, selectDrawnStones } from "@/data/daily-draw.repository";
+import {
+  confirmDraw,
+  createDraw,
+  findDrawByDate,
+  rerollDraw,
+  selectDrawnStones,
+} from "@/data/daily-draw.repository";
 import { db } from "@/data/db";
 import migrations from "@/data/migrations/migrations";
 import { findPocketContaining } from "@/data/pocket.repository";
+import { dailyDraw } from "@/data/schema";
 import { selectStones } from "@/data/stone.repository";
 import { formatTodayLabel, getTodayKey } from "@/domain/day";
-import { drawStones, selectDrawCandidates } from "@/domain/draw";
+import { drawStones, remainingRerolls, selectDrawCandidates } from "@/domain/draw";
 import { getCurrentWeekRange } from "@/domain/week";
 import { systemClock } from "@/ports/clock";
 import { systemRandom } from "@/ports/random";
 import { supabase } from "@/ports/supabase";
+
+type DrawRow = typeof dailyDraw.$inferSelect;
 
 export default function TodayScreen() {
   const { success: migrationsReady, error: migrationError } = useMigrations(db, migrations);
   const { showErrorDialog } = useErrorDialog();
   const [userId, setUserId] = useState<string | null>(null);
   const [pocketId, setPocketId] = useState<string | null>(null);
-  const [drawId, setDrawId] = useState<string | null>(null);
+  const [draw, setDraw] = useState<DrawRow | null>(null);
   const [todayKey] = useState(() => getTodayKey(systemClock));
   const [weekRange] = useState(() => getCurrentWeekRange(systemClock));
 
@@ -38,11 +47,11 @@ export default function TodayScreen() {
       return;
     }
     setPocketId(findPocketContaining(db, userId, weekRange.startDate)?.id ?? null);
-    setDrawId(findDrawByDate(db, userId, todayKey)?.id ?? null);
+    setDraw(findDrawByDate(db, userId, todayKey) ?? null);
   }, [migrationsReady, userId, weekRange.startDate, todayKey]);
 
   const { data: stones } = useLiveQuery(selectStones(db, pocketId ?? ""), [pocketId]);
-  const { data: drawnStones } = useLiveQuery(selectDrawnStones(db, drawId ?? ""), [drawId]);
+  const { data: drawnStones } = useLiveQuery(selectDrawnStones(db, draw?.id ?? ""), [draw?.id]);
 
   if (migrationError) {
     return (
@@ -62,23 +71,23 @@ export default function TodayScreen() {
 
   const candidates = selectDrawCandidates(stones ?? []);
 
+  function pickStoneIds() {
+    return drawStones(candidates, DRAW_COUNT, systemRandom).map((item) => item.id);
+  }
+
   function handleDraw() {
     if (!userId || !pocketId) {
       return;
     }
 
     try {
-      const draw = createDraw(
-        db,
-        {
-          userId,
-          drawDate: todayKey,
-          pocketId,
-          stoneIds: drawStones(candidates, DRAW_COUNT, systemRandom).map((item) => item.id),
-        },
-        systemClock,
+      setDraw(
+        createDraw(
+          db,
+          { userId, drawDate: todayKey, pocketId, stoneIds: pickStoneIds() },
+          systemClock,
+        ),
       );
-      setDrawId(draw.id);
     } catch (error) {
       showErrorDialog({
         action: "뽑기",
@@ -88,18 +97,72 @@ export default function TodayScreen() {
     }
   }
 
+  function handleReroll() {
+    if (!draw) {
+      return;
+    }
+
+    try {
+      setDraw(rerollDraw(db, draw.id, pickStoneIds(), systemClock));
+    } catch (error) {
+      showErrorDialog({
+        action: "다시 뽑기",
+        code: ERROR_CODES.REROLL_FAILED,
+        message: error instanceof Error ? error.message : "다시 뽑지 못했습니다.",
+      });
+    }
+  }
+
+  function handleConfirm() {
+    if (!draw) {
+      return;
+    }
+
+    try {
+      setDraw(confirmDraw(db, draw.id, systemClock));
+    } catch (error) {
+      showErrorDialog({
+        action: "확정",
+        code: ERROR_CODES.CONFIRM_DRAW_FAILED,
+        message: error instanceof Error ? error.message : "오늘의 조약돌을 정하지 못했습니다.",
+      });
+    }
+  }
+
   return (
     <ThemedView style={styles.container}>
       <ThemedText type="title">{formatTodayLabel(todayKey)}</ThemedText>
 
-      {drawId !== null ? (
-        <ThemedView style={styles.cards}>
-          {(drawnStones ?? []).map((row) => (
-            <ThemedView key={row.stone.id} style={styles.card}>
-              <ThemedText style={styles.cardTitle}>{row.stone.title}</ThemedText>
+      {draw !== null ? (
+        <>
+          <ThemedView style={styles.cards}>
+            {(drawnStones ?? []).map((row) => (
+              <ThemedView key={row.stone.id} style={styles.card}>
+                <ThemedText style={styles.cardTitle}>{row.stone.title}</ThemedText>
+              </ThemedView>
+            ))}
+          </ThemedView>
+
+          {draw.confirmedAt === null ? (
+            <ThemedView style={styles.actions}>
+              {remainingRerolls(draw.rerollCount) > 0 ? (
+                <TouchableOpacity onPress={handleReroll} accessibilityRole="button">
+                  <ThemedText style={styles.rerollText}>
+                    다시 뽑기 ({remainingRerolls(draw.rerollCount)}번 남음)
+                  </ThemedText>
+                </TouchableOpacity>
+              ) : null}
+
+              <TouchableOpacity
+                style={styles.confirmButton}
+                onPress={handleConfirm}
+                accessibilityRole="button"
+              >
+                <ThemedText style={styles.confirmButtonText}>이걸로 할게요</ThemedText>
+              </TouchableOpacity>
             </ThemedView>
-          ))}
-        </ThemedView>
+          ) : null}
+        </>
       ) : candidates.length === 0 ? (
         <ThemedView style={styles.centered}>
           <ThemedText style={styles.guide}>
@@ -162,5 +225,26 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 17,
+  },
+  actions: {
+    alignItems: "center",
+    gap: 16,
+    paddingBottom: 8,
+  },
+  rerollText: {
+    color: "#208AEF",
+    fontSize: 15,
+    paddingVertical: 4,
+  },
+  confirmButton: {
+    backgroundColor: "#208AEF",
+    borderRadius: 999,
+    paddingHorizontal: 40,
+    paddingVertical: 14,
+  },
+  confirmButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

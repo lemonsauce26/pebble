@@ -5,7 +5,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Clock } from "@/ports/clock";
 
 import * as schema from "./schema";
-import { createDraw, findDrawByDate, selectDrawnStones } from "./daily-draw.repository";
+import {
+  confirmDraw,
+  createDraw,
+  findDrawByDate,
+  rerollDraw,
+  selectDrawnStones,
+} from "./daily-draw.repository";
 import { insertStone, selectStones } from "./stone.repository";
 
 function fixedClock(isoDate: string): Clock {
@@ -119,6 +125,90 @@ describe("daily-draw.repository", () => {
 
     // 어제 뽑혔든 아니든 주머니 안에서는 구분이 없다. 미완료 표시도 남지 않는다.
     expect(selectStones(db, "pocket-1").all().map((row) => row.id)).toEqual([first.id, second.id]);
+  });
+
+  it("다시 뽑으면 조약돌이 바뀐다", () => {
+    const first = seedStone("처음 뽑힌 것", "2026-10-01T10:00:00");
+    const second = seedStone("다시 뽑힌 것", "2026-10-01T10:05:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-03", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+    rerollDraw(db, draw.id, [second.id], clock);
+
+    expect(selectDrawnStones(db, draw.id).all().map((row) => row.stone.title)).toEqual([
+      "다시 뽑힌 것",
+    ]);
+  });
+
+  it("다시 뽑아도 그날의 뽑기 기록은 하나뿐이다", () => {
+    const first = seedStone("조약돌", "2026-10-01T10:00:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-03", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+    const rerolled = rerollDraw(db, draw.id, [first.id], clock);
+
+    expect(rerolled.id).toBe(draw.id);
+    expect(findDrawByDate(db, "user-1", "2026-10-03")?.id).toBe(draw.id);
+  });
+
+  it("다시 뽑은 횟수가 쌓인다", () => {
+    const first = seedStone("조약돌", "2026-10-01T10:00:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-03", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+
+    expect(rerollDraw(db, draw.id, [first.id], clock).rerollCount).toBe(1);
+    expect(rerollDraw(db, draw.id, [first.id], clock).rerollCount).toBe(2);
+  });
+
+  it("다시 뽑기를 다 쓰면 거부한다", () => {
+    const first = seedStone("조약돌", "2026-10-01T10:00:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-03", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+    rerollDraw(db, draw.id, [first.id], clock);
+    rerollDraw(db, draw.id, [first.id], clock);
+
+    expect(() => rerollDraw(db, draw.id, [first.id], clock)).toThrow("다시 뽑기를 모두 썼어요");
+  });
+
+  it("확정하면 확정 시각이 남는다", () => {
+    const first = seedStone("조약돌", "2026-10-01T10:00:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-03", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+
+    expect(confirmDraw(db, draw.id, clock).confirmedAt).toEqual(new Date("2026-10-03T10:00:00"));
+  });
+
+  it("확정한 뒤에는 다시 뽑을 수 없다", () => {
+    const first = seedStone("조약돌", "2026-10-01T10:00:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-03", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+    confirmDraw(db, draw.id, clock);
+
+    expect(() => rerollDraw(db, draw.id, [first.id], clock)).toThrow(
+      "이미 확정한 뽑기는 다시 뽑을 수 없어요",
+    );
   });
 
   it("날이 바뀌면 어제 뽑기와 별개로 새 뽑기가 생긴다", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Random } from "@/ports/random";
-import { drawStones, selectDrawCandidates } from "./draw";
+import { drawStones, remainingRerolls, selectDrawCandidates } from "./draw";
 
 /** 정해진 순서대로 난수를 돌려주는 가짜. 뽑기 결과를 단정할 수 있게 한다. */
 function fixedRandom(values: number[]): Random {
@@ -24,6 +24,21 @@ describe("selectDrawCandidates", () => {
     const stones = [{ id: "1", kind: "daily" as const }];
 
     expect(selectDrawCandidates(stones)).toEqual([]);
+  });
+});
+
+describe("remainingRerolls", () => {
+  it("아직 다시 뽑지 않았으면 두 번 남는다", () => {
+    expect(remainingRerolls(0)).toBe(2);
+  });
+
+  it("쓸수록 줄어든다", () => {
+    expect(remainingRerolls(1)).toBe(1);
+    expect(remainingRerolls(2)).toBe(0);
+  });
+
+  it("음수로는 내려가지 않는다", () => {
+    expect(remainingRerolls(3)).toBe(0);
   });
 });
 

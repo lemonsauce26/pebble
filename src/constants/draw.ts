@@ -11,3 +11,9 @@ export const DAY_BOUNDARY_HOUR = 1;
 
 /** 하루에 뽑는 조약돌 개수. */
 export const DRAW_COUNT = 3;
+
+/**
+ * 다시 뽑을 수 있는 횟수. 무제한이면 마음에 드는 패가 나올 때까지 돌리게 되어
+ * 결국 사용자가 고르는 것과 같아지고, 아예 없으면 답답해서 이탈한다.
+ */
+export const REROLL_LIMIT = 2;
