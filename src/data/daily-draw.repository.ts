@@ -66,6 +66,29 @@ export function rerollDraw(db: Db, drawId: string, stoneIds: string[], clock: Cl
   return findDrawById(db, drawId);
 }
 
+/** 에너지가 없는 날, 방치하고 도망가는 대신 당당하게 쉼을 선언한다. 되돌릴 수 있다. */
+export function restDraw(db: Db, drawId: string, clock: Clock) {
+  const draw = findDrawById(db, drawId);
+
+  if (draw.confirmedAt !== null) {
+    throw new Error("이미 확정한 날은 쉼으로 바꿀 수 없어요");
+  }
+
+  const now = clock.now();
+  db.update(dailyDraw).set({ restedAt: now, updatedAt: now }).where(eq(dailyDraw.id, drawId)).run();
+
+  return findDrawById(db, drawId);
+}
+
+export function cancelRest(db: Db, drawId: string, clock: Clock) {
+  db.update(dailyDraw)
+    .set({ restedAt: null, updatedAt: clock.now() })
+    .where(eq(dailyDraw.id, drawId))
+    .run();
+
+  return findDrawById(db, drawId);
+}
+
 export function confirmDraw(db: Db, drawId: string, clock: Clock) {
   const now = clock.now();
 

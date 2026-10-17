@@ -9,10 +9,12 @@ import { ThemedView } from "@/components/themed-view";
 import { DRAW_COUNT } from "@/constants/draw";
 import { ERROR_CODES } from "@/constants/error-codes";
 import {
+  cancelRest,
   confirmDraw,
   createDraw,
   findDrawByDate,
   rerollDraw,
+  restDraw,
   selectDrawnStones,
 } from "@/data/daily-draw.repository";
 import { db } from "@/data/db";
@@ -113,6 +115,38 @@ export default function TodayScreen() {
     }
   }
 
+  function handleRest() {
+    if (!draw) {
+      return;
+    }
+
+    try {
+      setDraw(restDraw(db, draw.id, systemClock));
+    } catch (error) {
+      showErrorDialog({
+        action: "쉬기",
+        code: ERROR_CODES.REST_FAILED,
+        message: error instanceof Error ? error.message : "오늘을 쉼으로 두지 못했습니다.",
+      });
+    }
+  }
+
+  function handleCancelRest() {
+    if (!draw) {
+      return;
+    }
+
+    try {
+      setDraw(cancelRest(db, draw.id, systemClock));
+    } catch (error) {
+      showErrorDialog({
+        action: "되돌리기",
+        code: ERROR_CODES.CANCEL_REST_FAILED,
+        message: error instanceof Error ? error.message : "되돌리지 못했습니다.",
+      });
+    }
+  }
+
   function handleConfirm() {
     if (!draw) {
       return;
@@ -133,7 +167,15 @@ export default function TodayScreen() {
     <ThemedView style={styles.container}>
       <ThemedText type="title">{formatTodayLabel(todayKey)}</ThemedText>
 
-      {draw !== null ? (
+      {draw !== null && draw.restedAt !== null ? (
+        <ThemedView style={styles.centered}>
+          <ThemedText style={styles.restTitle}>오늘은 쉬어가요</ThemedText>
+          <ThemedText style={styles.restMessage}>충전도 하루의 일이에요.</ThemedText>
+          <TouchableOpacity onPress={handleCancelRest} accessibilityRole="button">
+            <ThemedText style={styles.linkText}>역시 해볼까요?</ThemedText>
+          </TouchableOpacity>
+        </ThemedView>
+      ) : draw !== null ? (
         <>
           <ThemedView style={styles.cards}>
             {(drawnStones ?? []).map((row) => (
@@ -159,6 +201,11 @@ export default function TodayScreen() {
                 accessibilityRole="button"
               >
                 <ThemedText style={styles.confirmButtonText}>이걸로 할게요</ThemedText>
+              </TouchableOpacity>
+
+              {/* 뽑기 전에 두면 뽑는 것보다 누르기 쉬워서 회피 경로가 된다 (기획서 8장). */}
+              <TouchableOpacity onPress={handleRest} accessibilityRole="button">
+                <ThemedText style={styles.restLinkText}>오늘은 쉴게요</ThemedText>
               </TouchableOpacity>
             </ThemedView>
           ) : null}
@@ -230,6 +277,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 16,
     paddingBottom: 8,
+  },
+  restTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+  },
+  restMessage: {
+    opacity: 0.6,
+    marginTop: -12,
+  },
+  restLinkText: {
+    opacity: 0.5,
+    fontSize: 14,
+    paddingVertical: 4,
+  },
+  linkText: {
+    color: "#208AEF",
+    fontSize: 15,
+    paddingVertical: 4,
   },
   rerollText: {
     color: "#208AEF",

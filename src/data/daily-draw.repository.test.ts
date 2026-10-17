@@ -6,10 +6,12 @@ import type { Clock } from "@/ports/clock";
 
 import * as schema from "./schema";
 import {
+  cancelRest,
   confirmDraw,
   createDraw,
   findDrawByDate,
   rerollDraw,
+  restDraw,
   selectDrawnStones,
 } from "./daily-draw.repository";
 import { insertStone, selectStones } from "./stone.repository";
@@ -209,6 +211,71 @@ describe("daily-draw.repository", () => {
     expect(() => rerollDraw(db, draw.id, [first.id], clock)).toThrow(
       "이미 확정한 뽑기는 다시 뽑을 수 없어요",
     );
+  });
+
+  it("쉬기로 하면 쉼이 기록된다", () => {
+    const first = seedStone("조약돌", "2026-10-01T10:00:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-03", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+
+    expect(restDraw(db, draw.id, clock).restedAt).toEqual(new Date("2026-10-03T10:00:00"));
+  });
+
+  it("쉬기로 한 것을 되돌릴 수 있다", () => {
+    const first = seedStone("조약돌", "2026-10-01T10:00:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-03", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+    restDraw(db, draw.id, clock);
+
+    expect(cancelRest(db, draw.id, clock).restedAt).toBeNull();
+  });
+
+  it("되돌리고 나면 남은 다시 뽑기 횟수는 그대로다", () => {
+    const first = seedStone("조약돌", "2026-10-01T10:00:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-03", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+    rerollDraw(db, draw.id, [first.id], clock);
+    restDraw(db, draw.id, clock);
+
+    expect(cancelRest(db, draw.id, clock).rerollCount).toBe(1);
+  });
+
+  it("쉬는 날에도 뽑힌 조약돌은 그대로 남아 있다", () => {
+    const first = seedStone("조약돌", "2026-10-01T10:00:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-03", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+    restDraw(db, draw.id, clock);
+
+    expect(selectDrawnStones(db, draw.id).all()).toHaveLength(1);
+  });
+
+  it("이미 확정했으면 쉴 수 없다", () => {
+    const first = seedStone("조약돌", "2026-10-01T10:00:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-03", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+    confirmDraw(db, draw.id, clock);
+
+    expect(() => restDraw(db, draw.id, clock)).toThrow("이미 확정한 날은 쉼으로 바꿀 수 없어요");
   });
 
   it("날이 바뀌면 어제 뽑기와 별개로 새 뽑기가 생긴다", () => {
