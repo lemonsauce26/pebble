@@ -21,7 +21,9 @@ import { toMonthPeriod } from "@/domain/period";
 import type { NewStone } from "@/domain/stone";
 import { formatWeekLabel, getCurrentWeekRange } from "@/domain/week";
 import { systemClock } from "@/ports/clock";
+import { supabaseStoneRemote } from "@/ports/stone-remote";
 import { supabase } from "@/ports/supabase";
+import { pushStone, pushStoneDeletion } from "@/sync/stone-push";
 
 type StoneData = typeof stoneTable.$inferSelect;
 
@@ -121,6 +123,16 @@ export default function WeeklyScreen() {
     );
   }
 
+  function pushToCloud(promise: Promise<void>, action: string, code: string, fallback: string) {
+    promise.catch((error) => {
+      showErrorDialog({
+        action,
+        code,
+        message: error instanceof Error ? error.message : fallback,
+      });
+    });
+  }
+
   function handleAddStone(planId: string | null, input: NewStone): boolean {
     if (!userId) {
       return false;
@@ -128,7 +140,7 @@ export default function WeeklyScreen() {
 
     try {
       const pocket = getOrCreatePocket(db, userId, weekRange, systemClock);
-      insertStone(
+      const saved = insertStone(
         db,
         {
           userId,
@@ -141,6 +153,13 @@ export default function WeeklyScreen() {
         systemClock,
       );
       setPocketId(pocket.id);
+
+      pushToCloud(
+        pushStone(supabaseStoneRemote, pocket, saved),
+        "클라우드 저장",
+        ERROR_CODES.STONE_CLOUD_PUSH_FAILED,
+        "인터넷 연결을 확인해주세요. 이 기기에는 저장되어 있습니다.",
+      );
       return true;
     } catch (error) {
       showErrorDialog({
@@ -224,12 +243,24 @@ export default function WeeklyScreen() {
         code: ERROR_CODES.STONE_DELETE_FAILED,
         message: error instanceof Error ? error.message : "조약돌을 빼내지 못했습니다.",
       });
+      return;
     }
+
+    pushToCloud(
+      pushStoneDeletion(supabaseStoneRemote, target.id),
+      "클라우드 삭제",
+      ERROR_CODES.STONE_CLOUD_DELETE_FAILED,
+      "인터넷 연결을 확인해주세요. 이 기기에서는 삭제되었습니다.",
+    );
   }
 
   function handleUpdateStone(stoneId: string, input: NewStone): boolean {
+    if (!userId) {
+      return false;
+    }
+
     try {
-      updateStone(
+      const updated = updateStone(
         db,
         {
           id: stoneId,
@@ -240,6 +271,15 @@ export default function WeeklyScreen() {
         systemClock,
       );
       setEditingStoneId(null);
+
+      // 주머니를 함께 올린다. 연동 전에 만든 주머니는 클라우드에 없다.
+      const pocket = getOrCreatePocket(db, userId, weekRange, systemClock);
+      pushToCloud(
+        pushStone(supabaseStoneRemote, pocket, updated),
+        "클라우드 저장",
+        ERROR_CODES.STONE_CLOUD_PUSH_FAILED,
+        "인터넷 연결을 확인해주세요. 이 기기에는 저장되어 있습니다.",
+      );
       return true;
     } catch (error) {
       showErrorDialog({

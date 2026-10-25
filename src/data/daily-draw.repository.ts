@@ -8,6 +8,16 @@ import { dailyDraw, dailyDrawStone, stone } from "./schema";
 
 type Db = ExpoSQLiteDatabase<Record<string, unknown>> | BetterSQLite3Database<Record<string, unknown>>;
 
+/**
+ * 여러 줄을 쓰는 동안 중간에 실패하면 반쪽짜리 뽑기가 남는다.
+ * 한 덩어리로 묶어서, 하나라도 실패하면 전부 되돌린다.
+ */
+function inTransaction(db: Db, work: (tx: Db) => void) {
+  (db as BetterSQLite3Database<Record<string, unknown>>).transaction((tx) => {
+    work(tx as unknown as Db);
+  });
+}
+
 /** 하루에 뽑기는 하나뿐이라 날짜 하나로 찾는다. */
 export function findDrawByDate(db: Db, userId: string, drawDate: string) {
   return db
@@ -57,11 +67,13 @@ export function rerollDraw(db: Db, drawId: string, stoneIds: string[], clock: Cl
   }
 
   const now = clock.now();
-  replaceDrawnStones(db, drawId, stoneIds, now);
-  db.update(dailyDraw)
-    .set({ rerollCount: draw.rerollCount + 1, updatedAt: now })
-    .where(eq(dailyDraw.id, drawId))
-    .run();
+  inTransaction(db, (tx) => {
+    replaceDrawnStones(tx, drawId, stoneIds, now);
+    tx.update(dailyDraw)
+      .set({ rerollCount: draw.rerollCount + 1, updatedAt: now })
+      .where(eq(dailyDraw.id, drawId))
+      .run();
+  });
 
   return findDrawById(db, drawId);
 }
@@ -97,6 +109,11 @@ export function confirmDraw(db: Db, drawId: string, clock: Clock) {
   return findDrawById(db, drawId);
 }
 
+/** 클라우드로 올릴 때 쓰는 원본 행. 화면에 그릴 때는 `selectDrawnStones`를 쓴다. */
+export function findDrawStoneRows(db: Db, drawId: string) {
+  return db.select().from(dailyDrawStone).where(eq(dailyDrawStone.drawId, drawId)).all();
+}
+
 export function createDraw(
   db: Db,
   input: { userId: string; drawDate: string; pocketId: string; stoneIds: string[] },
@@ -115,8 +132,10 @@ export function createDraw(
     updatedAt: now,
   };
 
-  db.insert(dailyDraw).values(row).run();
-  replaceDrawnStones(db, row.id, input.stoneIds, now);
+  inTransaction(db, (tx) => {
+    tx.insert(dailyDraw).values(row).run();
+    replaceDrawnStones(tx, row.id, input.stoneIds, now);
+  });
 
   return row;
 }

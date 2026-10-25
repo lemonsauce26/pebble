@@ -278,6 +278,48 @@ describe("daily-draw.repository", () => {
     expect(() => restDraw(db, draw.id, clock)).toThrow("이미 확정한 날은 쉼으로 바꿀 수 없어요");
   });
 
+  // 뽑기 1줄과 조약돌 여러 줄을 나눠 쓰다가 중간에 실패하면 반쪽 뽑기가 남는다.
+  // 아래 두 테스트는 그런 일이 없도록 한 덩어리로 묶여 있는지를 본다.
+  // (조약돌 id를 빈 값으로 넣어 쓰기 도중 실패를 일부러 만든다)
+  const BROKEN_STONE_ID = null as unknown as string;
+
+  it("뽑는 도중 실패하면 뽑기도 남지 않는다", () => {
+    const first = seedStone("조약돌", "2026-10-01T10:00:00");
+
+    expect(() =>
+      createDraw(
+        db,
+        {
+          userId: "user-1",
+          drawDate: "2026-10-24",
+          pocketId: "pocket-1",
+          stoneIds: [first.id, BROKEN_STONE_ID],
+        },
+        clock,
+      ),
+    ).toThrow();
+
+    expect(findDrawByDate(db, "user-1", "2026-10-24")).toBeUndefined();
+  });
+
+  it("다시 뽑는 도중 실패하면 원래 조약돌이 그대로 남는다", () => {
+    const first = seedStone("원래 뽑힌 것", "2026-10-01T10:00:00");
+    const second = seedStone("새로 뽑힐 뻔한 것", "2026-10-01T10:05:00");
+
+    const draw = createDraw(
+      db,
+      { userId: "user-1", drawDate: "2026-10-24", pocketId: "pocket-1", stoneIds: [first.id] },
+      clock,
+    );
+
+    expect(() => rerollDraw(db, draw.id, [second.id, BROKEN_STONE_ID], clock)).toThrow();
+
+    expect(selectDrawnStones(db, draw.id).all().map((row) => row.stone.title)).toEqual([
+      "원래 뽑힌 것",
+    ]);
+    expect(findDrawByDate(db, "user-1", "2026-10-24")?.rerollCount).toBe(0);
+  });
+
   it("날이 바뀌면 어제 뽑기와 별개로 새 뽑기가 생긴다", () => {
     const first = seedStone("조약돌", "2026-10-01T10:00:00");
 

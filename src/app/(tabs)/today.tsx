@@ -13,21 +13,24 @@ import {
   confirmDraw,
   createDraw,
   findDrawByDate,
+  findDrawStoneRows,
   rerollDraw,
   restDraw,
   selectDrawnStones,
 } from "@/data/daily-draw.repository";
 import { db } from "@/data/db";
 import migrations from "@/data/migrations/migrations";
-import { findPocketContaining } from "@/data/pocket.repository";
+import { findPocketContaining, getOrCreatePocket } from "@/data/pocket.repository";
 import { dailyDraw } from "@/data/schema";
 import { selectStones } from "@/data/stone.repository";
 import { formatTodayLabel, getTodayKey } from "@/domain/day";
 import { drawStones, remainingRerolls, selectDrawCandidates } from "@/domain/draw";
 import { getCurrentWeekRange } from "@/domain/week";
 import { systemClock } from "@/ports/clock";
+import { supabaseDailyDrawRemote } from "@/ports/daily-draw-remote";
 import { systemRandom } from "@/ports/random";
 import { supabase } from "@/ports/supabase";
+import { pushDailyDraw } from "@/sync/daily-draw-push";
 
 type DrawRow = typeof dailyDraw.$inferSelect;
 
@@ -77,13 +80,38 @@ export default function TodayScreen() {
     return drawStones(candidates, DRAW_COUNT, systemRandom).map((item) => item.id);
   }
 
+  /** 뽑기는 바뀔 때마다 통째로 다시 올린다. 기록이 하루에 하나뿐이라 그게 가장 단순하다. */
+  function applyDraw(updated: DrawRow) {
+    setDraw(updated);
+
+    if (!userId) {
+      return;
+    }
+
+    // 주머니까지 한 덩어리로 올린다. 연동 전에 만든 주머니는 클라우드에 없다.
+    const pocket = getOrCreatePocket(db, userId, weekRange, systemClock);
+
+    pushDailyDraw(supabaseDailyDrawRemote, pocket, updated, findDrawStoneRows(db, updated.id)).catch(
+      (error) => {
+        showErrorDialog({
+          action: "클라우드 저장",
+          code: ERROR_CODES.DRAW_CLOUD_PUSH_FAILED,
+          message:
+            error instanceof Error
+              ? error.message
+              : "인터넷 연결을 확인해주세요. 이 기기에는 저장되어 있습니다.",
+        });
+      },
+    );
+  }
+
   function handleDraw() {
     if (!userId || !pocketId) {
       return;
     }
 
     try {
-      setDraw(
+      applyDraw(
         createDraw(
           db,
           { userId, drawDate: todayKey, pocketId, stoneIds: pickStoneIds() },
@@ -105,7 +133,7 @@ export default function TodayScreen() {
     }
 
     try {
-      setDraw(rerollDraw(db, draw.id, pickStoneIds(), systemClock));
+      applyDraw(rerollDraw(db, draw.id, pickStoneIds(), systemClock));
     } catch (error) {
       showErrorDialog({
         action: "다시 뽑기",
@@ -121,7 +149,7 @@ export default function TodayScreen() {
     }
 
     try {
-      setDraw(restDraw(db, draw.id, systemClock));
+      applyDraw(restDraw(db, draw.id, systemClock));
     } catch (error) {
       showErrorDialog({
         action: "쉬기",
@@ -137,7 +165,7 @@ export default function TodayScreen() {
     }
 
     try {
-      setDraw(cancelRest(db, draw.id, systemClock));
+      applyDraw(cancelRest(db, draw.id, systemClock));
     } catch (error) {
       showErrorDialog({
         action: "되돌리기",
@@ -153,7 +181,7 @@ export default function TodayScreen() {
     }
 
     try {
-      setDraw(confirmDraw(db, draw.id, systemClock));
+      applyDraw(confirmDraw(db, draw.id, systemClock));
     } catch (error) {
       showErrorDialog({
         action: "확정",
